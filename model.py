@@ -1,5 +1,7 @@
 import torch.nn as nn
+from torch import save as torchsave
 import copy
+from datetime import datetime
 
 
 def custom_efficient_net(
@@ -17,3 +19,9 @@ def custom_efficient_net(
     )
 
     return model
+
+
+def save_model(model, prefix):
+    dtime = datetime.now().strftime("%d%m%Y:%H%M")
+    model_name = f"{prefix}_{dtime}.pt"
+    torchsave(model.state_dict(), model_name)
