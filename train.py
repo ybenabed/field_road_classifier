@@ -1,7 +1,7 @@
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader, random_split
 import torch
-from model import custom_efficient_net, save_model
+from model import custom_efficient_net, save_train_model
 
 
 class FieldRoadClassifier:
@@ -138,7 +138,10 @@ class FieldRoadClassifier:
                 f"Epoch {epoch+1}/{num_epochs} Total loss: {epoch_loss}\t Validation loss: {val_loss}"
             )
 
-        save_model(model=model, prefix="wout_augmentation", metrics=metrics)
+        model_folder = save_train_model(
+            model=model, prefix="wout_augmentation", metrics=metrics
+        )
+        self.output_folder = model_folder
 
     def train_step(self, model, optimizer, criterion, inputs, labels):
         """

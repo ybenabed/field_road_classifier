@@ -23,11 +23,27 @@ def custom_efficient_net(
     return model
 
 
-def save_model(model, prefix: str, metrics: dict):
+def save_train_model(model, prefix: str, metrics: dict) -> str:
+    """
+    Save the PyTorch model, metrics, and timestamped model information.
+
+    Parameters:
+    - model: The PyTorch model to be saved.
+    - prefix (str): A prefix for the model name.
+    - metrics (dict): Dictionary containing training metrics.
+
+    The saved files include:
+    - A folder in the "outputs" directory with a timestamped model name.
+    - The PyTorch model's state dictionary saved as "model_final.pt" in the created folder.
+    - If metrics are provided, a "metrics.csv" file saved in the created folder.
+
+    """
     dtime = datetime.now().strftime("%d%m%Y:%H%M")
     model_name = f"{prefix}_{dtime}"
     os.makedirs(f"outputs/{model_name}")
     torchsave(model.state_dict(), f"outputs/{model_name}/model_final.pt")
     if metrics is not None:
         df = pd.DataFrame.from_dict(metrics, orient="index")
-        df.to_csv("metrics.csv")
+        df.to_csv(f"outputs/{model_name}/metrics.csv")
+
+    return f"outputs/{model_name}"
