@@ -2,6 +2,8 @@ import torch.nn as nn
 from torch import save as torchsave
 import copy
 from datetime import datetime
+import os
+import pandas as pd
 
 
 def custom_efficient_net(
@@ -21,7 +23,11 @@ def custom_efficient_net(
     return model
 
 
-def save_model(model, prefix):
+def save_model(model, prefix: str, metrics: dict):
     dtime = datetime.now().strftime("%d%m%Y:%H%M")
-    model_name = f"{prefix}_{dtime}.pt"
-    torchsave(model.state_dict(), model_name)
+    model_name = f"{prefix}_{dtime}"
+    os.makedirs(f"outputs/{model_name}")
+    torchsave(model.state_dict(), f"outputs/{model_name}/model_final.pt")
+    if metrics is not None:
+        df = pd.DataFrame.from_dict(metrics, orient="index")
+        df.to_csv("metrics.csv")
