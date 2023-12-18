@@ -1,6 +1,7 @@
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader, random_split
 import torch
+from eval import calculate_metrics
 from model import custom_efficient_net, save_train_model
 
 
@@ -47,6 +48,8 @@ class FieldRoadClassifier:
         )
 
         dataset = datasets.ImageFolder(root=dataset_path, transform=transform)
+        self.class_labels = dataset.classes
+        class_weights = self.ds_class_weights(dataset)
 
         train_size = max(len(dataset) - 150, int(0.8 * len(dataset)))
         val_size = len(dataset) - train_size
@@ -55,7 +58,14 @@ class FieldRoadClassifier:
         train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-        return train_loader, val_loader
+        return train_loader, val_loader, class_weights
+
+    def ds_class_weights(self, dataset):
+        class_counts = torch.tensor(dataset.targets).bincount()
+        total_samples = len(dataset)
+        num_classes = len(class_counts)
+        class_weights = total_samples / (num_classes * class_counts.float())
+        return class_weights
 
     def load_model(self) -> torch.nn.Module:
         """
@@ -73,7 +83,7 @@ class FieldRoadClassifier:
         return model
 
     def fit(self, dataset_path: str, num_epochs: int = 10, VAL_TOLERANCE: int = 1):
-        train_loader, val_loader = self.load_data(dataset_path=dataset_path)
+        train_loader, val_loader, _ = self.load_data(dataset_path=dataset_path)
         self.model = self.model.to(self.device)
         optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
         criterion = torch.nn.CrossEntropyLoss()
@@ -113,14 +123,24 @@ class FieldRoadClassifier:
                 epoch_loss += loss.item()
 
             model.eval()
+            val_outputs, val_labels = [], []
+
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-                loss = self.val_step(model, criterion, inputs, labels)
+                loss, outputs = self.val_step(model, criterion, inputs, labels)
                 val_loss += loss.item()
+                val_outputs.append(outputs)
+                val_labels.append(labels.cpu())
+
+            val_outputs = torch.cat(val_outputs)
+            val_labels = torch.cat(val_labels)
+
+            val_metrics = calculate_metrics(val_outputs, val_labels)
 
             metrics[f"Epoch {epoch+1}"] = {
                 "Total Loss": epoch_loss,
                 "Val Loss": val_loss,
+                # **val_metrics,
             }
             if val_loss >= min_validation:
                 val_counter += 1
@@ -155,11 +175,11 @@ class FieldRoadClassifier:
         optimizer.step()
         return loss
 
-    def val_step(self, model, criterion, inputs, labels):
+    def val_step(self, model: torch.nn.Module, criterion, inputs, labels):
         """
         Perform a single validation step.
         """
 
         outputs = model(inputs)
         loss = criterion(outputs, labels)
-        return loss
+        return loss, outputs.cpu()
