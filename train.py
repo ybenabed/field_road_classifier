@@ -4,6 +4,7 @@ import torch
 from eval import calculate_metrics
 from model import custom_efficient_net, save_train_model
 from typing import Tuple
+import argparse
 
 
 class FieldRoadClassifier:
@@ -269,3 +270,28 @@ class FieldRoadClassifier:
         eval_outs = torch.cat(eval_outs)
 
         calculate_metrics(eval_outs, eval_labels)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Field Road Classifier")
+    parser.add_argument(
+        "--prefix", type=str, help="Prefix for saving the trained model", required=True
+    )
+    parser.add_argument(
+        "--path_to_data",
+        type=str,
+        help="Path to the root of the dataset",
+        required=True,
+    )
+    parser.add_argument(
+        "--val_tolerance", type=int, help="Tolerance for early stopping", required=True
+    )
+
+    args = parser.parse_args()
+
+    prefix = args.prefix
+    path_to_data = args.path_to_data
+    val_tolerance = args.val_tolerance
+
+    field_road = FieldRoadClassifier(prefix=prefix)
+    field_road.fit(dataset_path=path_to_data, VAL_TOLERANCE=val_tolerance)
