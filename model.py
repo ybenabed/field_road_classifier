@@ -66,8 +66,11 @@ def save_train_model(model, prefix: str, metrics: dict, conf_matrix: dict) -> st
     conf_matrix["Recall"] = recall
     conf_matrix["F1 Score"] = f1_score
 
-    with open(f"outputs/{model_name}/confusion_matrix.json", "w") as json_file:
-        json.dump(conf_matrix, json_file)
+    metrics_df = pd.DataFrame([conf_matrix])
+    metrics_df.to_csv(f"outputs/{model_name}/confusion_matrix.csv", index=False)
+
+    # with open(f"outputs/{model_name}/confusion_matrix.json", "w") as json_file:
+    #     json.dump(conf_matrix, json_file)
 
     return f"outputs/{model_name}"
 
