@@ -86,7 +86,7 @@ class FieldRoadClassifier:
     def fit(self, dataset_path: str, num_epochs: int = 10, VAL_TOLERANCE: int = 1):
         train_loader, val_loader, _ = self.load_data(dataset_path=dataset_path)
         self.model = self.model.to(self.device)
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
+        optimizer = torch.optim.Adagrad(self.model.parameters(), lr=0.001)
         criterion = torch.nn.CrossEntropyLoss()
 
         self.training(

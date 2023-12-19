@@ -1,3 +1,4 @@
 .vscode/settings.json
 torchvenv
-results/res_0647.png
+results/
+.gitignore
