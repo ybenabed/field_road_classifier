@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, random_split
 import torch
 from eval import calculate_metrics
 from model import custom_efficient_net, save_train_model
+from typing import Tuple
 
 
 class FieldRoadClassifier:
@@ -13,25 +14,26 @@ class FieldRoadClassifier:
     - target_size (tuple): Target size for image resizing (default: (256, 256)).
     - device (torch.device): Device to be used for computation ('cuda' or 'cpu').
     - model (torch.nn.Module): Custom model for classification.
+    - prefix (str): Prefix for saving the trained model.
 
-    Methods:
-    - load_data(dataset_path: str) -> tuple: Load and prepare the dataset for training and validation.
-    - load_model() -> torch.nn.Module: Load a pre-trained EfficientNet model and create a custom model.
-    - fit(dataset_path: str, num_epochs: int = 10, VAL_TOLERANCE: int = 1): Train the model on the specified dataset.
-    - training(num_epochs: int, VAL_TOLERANCE: int, train_loader: DataLoader, val_loader: DataLoader,
-               model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module):
-               Train the model for the specified number of epochs with early stopping.
-    - train_step(model, optimizer, criterion, inputs, labels): Perform a single training step.
-    - val_step(model, criterion, inputs, labels): Perform a single validation step.
     """
 
-    def __init__(self, prefix: str, target_size: tuple = (256, 256)):
+    def __init__(self, prefix: str, target_size: Tuple[int, int] = (256, 256)):
+        """
+        Initialize the FieldRoadClassifier.
+
+        Parameters:
+        - prefix (str): Prefix for saving the trained model.
+        - target_size (Tuple[int, int]): Target size for image resizing (default: (256, 256)).
+        """
         self.target_size = target_size
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.load_model()
         self.prefix = prefix
 
-    def load_data(self, dataset_path: str) -> tuple:
+    def load_data(
+        self, dataset_path: str
+    ) -> Tuple[DataLoader, DataLoader, torch.Tensor]:
         """
         Load and prepare the dataset for training and validation.
 
@@ -39,7 +41,7 @@ class FieldRoadClassifier:
         - dataset_path (str): Path to the root of the dataset.
 
         Returns:
-        - tuple: Tuple containing train DataLoader and validation DataLoader.
+        - Tuple[DataLoader, DataLoader, torch.Tensor]: Tuple containing train DataLoader, validation DataLoader, and class weights.
         """
         transform = transforms.Compose(
             [
@@ -61,7 +63,16 @@ class FieldRoadClassifier:
 
         return self.train_loader, self.val_loader, class_weights
 
-    def ds_class_weights(self, dataset):
+    def ds_class_weights(self, dataset: datasets.ImageFolder) -> torch.Tensor:
+        """
+        Calculate class weights for the dataset.
+
+        Parameters:
+        - dataset (datasets.ImageFolder): Image dataset.
+
+        Returns:
+        - torch.Tensor: Class weights.
+        """
         class_counts = torch.tensor(dataset.targets).bincount()
         total_samples = len(dataset)
         num_classes = len(class_counts)
@@ -84,6 +95,14 @@ class FieldRoadClassifier:
         return model
 
     def fit(self, dataset_path: str, num_epochs: int = 10, VAL_TOLERANCE: int = 1):
+        """
+        Train the model on the specified dataset.
+
+        Parameters:
+        - dataset_path (str): Path to the root of the dataset.
+        - num_epochs (int): Number of training epochs (default: 10).
+        - VAL_TOLERANCE (int): Tolerance for early stopping (default: 1).
+        """
         train_loader, val_loader, _ = self.load_data(dataset_path=dataset_path)
         self.model = self.model.to(self.device)
         optimizer = torch.optim.Adagrad(self.model.parameters(), lr=0.001)
@@ -109,6 +128,18 @@ class FieldRoadClassifier:
         optimizer: torch.optim.Optimizer,
         criterion: torch.nn.Module,
     ):
+        """
+        Train the model for the specified number of epochs with early stopping.
+
+        Parameters:
+        - num_epochs (int): Number of training epochs.
+        - VAL_TOLERANCE (int): Tolerance for early stopping.
+        - train_loader (DataLoader): DataLoader for training set.
+        - val_loader (DataLoader): DataLoader for validation set.
+        - model (torch.nn.Module): Model to be trained.
+        - optimizer (torch.optim.Optimizer): Model optimizer.
+        - criterion (torch.nn.Module): Loss function.
+        """
         metrics = {}
         val_counter = 0
         min_validation = float("inf")
@@ -166,11 +197,27 @@ class FieldRoadClassifier:
         )
         self.output_folder = model_folder
 
-    def train_step(self, model, optimizer, criterion, inputs, labels):
+    def train_step(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        criterion: torch.nn.Module,
+        inputs: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> torch.Tensor:
         """
         Perform a single training step.
-        """
 
+        Parameters:
+        - model (torch.nn.Module): Model to be trained.
+        - optimizer (torch.optim.Optimizer): Model optimizer.
+        - criterion (torch.nn.Module): Loss function.
+        - inputs (torch.Tensor): Input data.
+        - labels (torch.Tensor): Ground truth labels.
+
+        Returns:
+        - torch.Tensor: Loss value.
+        """
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, labels)
@@ -178,17 +225,38 @@ class FieldRoadClassifier:
         optimizer.step()
         return loss
 
-    def val_step(self, model: torch.nn.Module, criterion, inputs, labels):
+    def val_step(
+        self,
+        model: torch.nn.Module,
+        criterion: torch.nn.Module,
+        inputs: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> Tuple[torch.Tensor, dict]:
         """
         Perform a single validation step.
-        """
 
+        Parameters:
+        - model (torch.nn.Module): Model to be validated.
+        - criterion (torch.nn.Module): Loss function.
+        - inputs (torch.Tensor): Input data.
+        - labels (torch.Tensor): Ground truth labels.
+
+        Returns:
+        - Tuple[torch.Tensor, dict]: Tuple containing loss value and evaluation metrics.
+        """
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         metrics = calculate_metrics(outputs=outputs, labels=labels)
         return loss, metrics
 
-    def evaluation(self, model: torch.nn.Module, val_loader):
+    def evaluation(self, model: torch.nn.Module, val_loader: DataLoader):
+        """
+        Evaluate the model on the validation set.
+
+        Parameters:
+        - model (torch.nn.Module): Model to be evaluated.
+        - val_loader (DataLoader): DataLoader for validation set.
+        """
         model.eval()
         eval_labels, eval_outs = [], []
         for inputs, labels in val_loader:

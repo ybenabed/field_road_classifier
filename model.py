@@ -3,7 +3,6 @@ from torch import save as torchsave, load as torchload
 import copy
 from datetime import datetime
 import os
-import json
 import pandas as pd
 
 
@@ -47,7 +46,7 @@ def save_train_model(model, prefix: str, metrics: dict, conf_matrix: dict) -> st
         df = pd.DataFrame.from_dict(metrics, orient="index")
         df.to_csv(f"outputs/{model_name}/metrics.csv")
 
-    tn, fp, fn, tp = (
+    _, fp, fn, tp = (
         conf_matrix["True Negatives"],
         conf_matrix["False Positives"],
         conf_matrix["False Negatives"],
