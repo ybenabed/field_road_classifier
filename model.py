@@ -1,8 +1,9 @@
 import torch.nn as nn
-from torch import save as torchsave
+from torch import save as torchsave, load as torchload
 import copy
 from datetime import datetime
 import os
+import json
 import pandas as pd
 
 
@@ -23,7 +24,7 @@ def custom_efficient_net(
     return model
 
 
-def save_train_model(model, prefix: str, metrics: dict) -> str:
+def save_train_model(model, prefix: str, metrics: dict, conf_matrix: dict) -> str:
     """
     Save the PyTorch model, metrics, and timestamped model information.
 
@@ -46,4 +47,43 @@ def save_train_model(model, prefix: str, metrics: dict) -> str:
         df = pd.DataFrame.from_dict(metrics, orient="index")
         df.to_csv(f"outputs/{model_name}/metrics.csv")
 
+    tn, fp, fn, tp = (
+        conf_matrix["True Negatives"],
+        conf_matrix["False Positives"],
+        conf_matrix["False Negatives"],
+        conf_matrix["True Positives"],
+    )
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1_score = (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) > 0
+        else 0
+    )
+
+    conf_matrix["Precision"] = precision
+    conf_matrix["Recall"] = recall
+    conf_matrix["F1 Score"] = f1_score
+
+    with open(f"outputs/{model_name}/confusion_matrix.json", "w") as json_file:
+        json.dump(conf_matrix, json_file)
+
     return f"outputs/{model_name}"
+
+
+def load_model_weights(model, checkpoint_path):
+    """
+    Load the weights of a PyTorch model from a checkpoint file.
+
+    Parameters:
+    - model: PyTorch model
+    - checkpoint_path: Path to the checkpoint file containing saved weights
+
+    Returns:
+    - model: PyTorch model with loaded weights
+    """
+    checkpoint = torchload(checkpoint_path)
+    model.load_state_dict(checkpoint)
+
+    return model

@@ -25,10 +25,11 @@ class FieldRoadClassifier:
     - val_step(model, criterion, inputs, labels): Perform a single validation step.
     """
 
-    def __init__(self, target_size=(256, 256)):
+    def __init__(self, prefix: str, target_size: tuple = (256, 256)):
         self.target_size = target_size
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.load_model()
+        self.prefix = prefix
 
     def load_data(self, dataset_path: str) -> tuple:
         """
@@ -55,10 +56,10 @@ class FieldRoadClassifier:
         val_size = len(dataset) - train_size
         train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+        self.train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        self.val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-        return train_loader, val_loader, class_weights
+        return self.train_loader, self.val_loader, class_weights
 
     def ds_class_weights(self, dataset):
         class_counts = torch.tensor(dataset.targets).bincount()
@@ -117,30 +118,32 @@ class FieldRoadClassifier:
             epoch_loss = 0
             val_loss = 0
 
+            conf_matrix = {
+                "True Positives": 0,
+                "False Positives": 0,
+                "True Negatives": 0,
+                "False Negatives": 0,
+            }
+
             for inputs, labels in train_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 loss = self.train_step(model, optimizer, criterion, inputs, labels)
                 epoch_loss += loss.item()
 
             model.eval()
-            val_outputs, val_labels = [], []
 
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-                loss, outputs = self.val_step(model, criterion, inputs, labels)
+                loss, confusion_matrix = self.val_step(model, criterion, inputs, labels)
+                conf_matrix["True Positives"] += confusion_matrix["True Positives"]
+                conf_matrix["False Positives"] += confusion_matrix["False Positives"]
+                conf_matrix["True Negatives"] += confusion_matrix["True Negatives"]
+                conf_matrix["False Negatives"] += confusion_matrix["False Negatives"]
                 val_loss += loss.item()
-                val_outputs.append(outputs)
-                val_labels.append(labels.cpu())
-
-            val_outputs = torch.cat(val_outputs)
-            val_labels = torch.cat(val_labels)
-
-            val_metrics = calculate_metrics(val_outputs, val_labels)
 
             metrics[f"Epoch {epoch+1}"] = {
                 "Total Loss": epoch_loss,
                 "Val Loss": val_loss,
-                # **val_metrics,
             }
             if val_loss >= min_validation:
                 val_counter += 1
@@ -159,7 +162,7 @@ class FieldRoadClassifier:
             )
 
         model_folder = save_train_model(
-            model=model, prefix="wout_augmentation", metrics=metrics
+            model=model, prefix=self.prefix, metrics=metrics, conf_matrix=conf_matrix
         )
         self.output_folder = model_folder
 
@@ -182,4 +185,19 @@ class FieldRoadClassifier:
 
         outputs = model(inputs)
         loss = criterion(outputs, labels)
-        return loss, outputs.cpu()
+        metrics = calculate_metrics(outputs=outputs, labels=labels)
+        return loss, metrics
+
+    def evaluation(self, model: torch.nn.Module, val_loader):
+        model.eval()
+        eval_labels, eval_outs = [], []
+        for inputs, labels in val_loader:
+            eval_labels.append(eval_labels)
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            outputs = model(inputs)
+            eval_outs.append(outputs)
+
+        eval_labels = torch.cat(eval_labels)
+        eval_outs = torch.cat(eval_outs)
+
+        calculate_metrics(eval_outs, eval_labels)
